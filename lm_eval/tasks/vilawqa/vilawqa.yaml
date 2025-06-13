@@ -1,0 +1,83 @@
+# my_custom_tasks/vilawqa/vilawqa.yaml
+
+task: vilawqa
+task_alias: ViLawQA Evaluation
+group:
+  - vietnamese_qa
+  - law_qa
+  - multiple_choice
+
+dataset_path: thangvip/vilawqa
+dataset_name: default # Hoặc null nếu không có subset cụ thể nào khác
+dataset_kwargs:
+  split: "validation" # Đảm bảo bạn đang sử dụng tập validation/test để đánh giá
+
+# === Cấu hình Prompting ===
+# doc_to_text: Cách tạo phần câu hỏi/context cho model.
+# Chúng ta sẽ bao gồm cả passage nếu có để mô hình có thể sử dụng thông tin đó để trả lời.
+# Sau đó là câu hỏi và các lựa chọn.
+
+# Định nghĩa các lựa chọn A, B, C, D từ danh sách "options"
+# Để làm điều này, chúng ta cần một processor để ánh xạ index sang chữ cái.
+# Hoặc đơn giản hơn, dùng index trực tiếp trong doc_to_choice.
+# Tuy nhiên, LM Eval Harness thường mong đợi doc_to_choice là một list các chuỗi đã được định dạng.
+# Để giống MMLU, chúng ta sẽ cần nối các options vào doc_to_text.
+
+doc_to_text: "{{passage}}\nQuestion: {{question}}\nOptions:\nA. {{options[0]}}\nB. {{options[1]}}\nC. {{options[2]}}\nD. {{options[3]}}\nAnswer:"
+# Cần đảm bảo rằng mỗi câu hỏi có đúng 4 lựa chọn.
+# Nếu số lượng lựa chọn có thể thay đổi, cần viết một processor phức tạp hơn.
+# Với ViLawQA, có vẻ luôn có 4 lựa chọn.
+
+doc_to_target: "{{['A', 'B', 'C', 'D'][answer_index]}}" # Chuyển đổi answer_index (0, 1, 2, 3) sang chữ cái (A, B, C, D)
+
+# doc_to_choice: Đây là danh sách các lựa chọn mà mô hình cần chọn.
+# Đối với multiple-choice, doc_to_choice phải chứa các giá trị mà doc_to_target có thể có.
+doc_to_choice:
+  - "A"
+  - "B"
+  - "C"
+  - "D"
+
+# === Few-shot Learning ===
+num_fewshot: 5 # Số lượng ví dụ few-shot. MMLU thường dùng 5-shot.
+fewshot_delimiter: "\n\n" # Dấu phân cách giữa các ví dụ few-shot.
+
+# === Metrics ===
+metrics:
+  - metric: acc # Accuracy là metric chính cho multiple-choice.
+    aggregation: mean
+    higher_is_better: true
+    # output_type: `loglikelihood` nếu bạn muốn model chọn từ các choices đã cho (như MMLU).
+    # output_type: `generate_until` nếu model sinh ra câu trả lời rồi bạn parse.
+    # Với format A, B, C, D, chúng ta dùng `loglikelihood` và `multiple_choice_acc`.
+
+# === Cấu hình khác ===
+# multiple_choice_acc là metric phù hợp nhất cho dạng này.
+# Không cần process_docs nếu cấu trúc trên đủ.
+# Nếu bạn muốn tùy biến nhiều hơn, ví dụ, trộn thứ tự các lựa chọn hoặc
+# xử lý các trường hợp không có đủ 4 lựa chọn, bạn sẽ cần process_docs.
+
+# Ví dụ về process_docs nếu cần tiền xử lý hoặc trộn lựa chọn:
+# process_docs: !function .processors.preprocess_vilawqa
+#
+# Và trong file `my_custom_tasks/vilawqa/processors.py`:
+#
+# import random
+#
+# def preprocess_vilawqa(doc):
+#     # Trộn ngẫu nhiên các lựa chọn và cập nhật answer_index
+#     options = list(doc["options"]) # Tạo bản sao để không sửa đổi trực tiếp doc
+#     correct_answer = options[doc["answer_index"]]
+#
+#     # Tạo danh sách các cặp (lựa chọn, index gốc)
+#     indexed_options = [(option, i) for i, option in enumerate(options)]
+#     random.shuffle(indexed_options)
+#
+#     new_options = [item[0] for item in indexed_options]
+#     new_answer_index = [item[1] for item in indexed_options].index(doc["answer_index"])
+#
+#     # Cập nhật doc
+#     doc["options"] = new_options
+#     doc["answer_index"] = new_answer_index
+#
+#     return doc
