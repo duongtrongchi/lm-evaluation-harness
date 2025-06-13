@@ -8,9 +8,9 @@ group:
   - multiple_choice
 
 dataset_path: thangvip/vilawqa
-dataset_name: default # Hoặc null nếu không có subset cụ thể nào khác
+dataset_name: default
 dataset_kwargs:
-  split: "validation" # Đảm bảo bạn đang sử dụng tập validation/test để đánh giá
+  split: "train"  # Using train split as specified in the dataset
 
 # === Cấu hình Prompting ===
 # doc_to_text: Cách tạo phần câu hỏi/context cho model.
@@ -81,3 +81,6 @@ metrics:
 #     doc["answer_index"] = new_answer_index
 #
 #     return doc
+
+# Add processor to handle the dataset format
+process_docs: !function .processors.preprocess_vilawqa
